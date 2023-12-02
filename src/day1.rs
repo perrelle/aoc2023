@@ -109,19 +109,19 @@ pub fn solve(input: &str) -> (u32, u32) {
 
 
 #[test]
-fn test1_1a() {
-    let solution = solve1(&include_str!("../inputs/day1.1a"));
+fn test_day1_example1() {
+    let solution = solve1(&include_str!("../inputs/day1-example1"));
     assert_eq!(solution, 142);
 }
 
 #[test]
-fn test1_1b() {
-    let solution = solve2(&include_str!("../inputs/day1.1b"));
+fn test_day1_example2() {
+    let solution = solve2(&include_str!("../inputs/day1-example2"));
     assert_eq!(solution, 281);
 }
 
 #[test]
-fn test1_2() {
-    let solution = solve(&include_str!("../inputs/day1.2"));
+fn test_day1_input() {
+    let solution = solve(&include_str!("../inputs/day1-input"));
     assert_eq!(solution, (56397, 55701));
 }
