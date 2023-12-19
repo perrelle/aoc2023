@@ -1,82 +1,5 @@
-use std::{fmt, ops};
-
+use crate::utils::{*,positions::*,directions::*,grids::*};
 use array2d::Array2D;
-
-#[derive (Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Direction4 {
-    North, East, South, West
-}
-
-impl Direction4 {
-    pub const ALL : [Direction4 ; 4] = [
-        Direction4::North,
-        Direction4::East,
-        Direction4::South,
-        Direction4::West,
-    ];
-
-    pub fn mirror(self) -> Self {
-        match self {
-            Direction4::North => Direction4::South,
-            Direction4::East => Direction4::West,
-            Direction4::South => Direction4::North,
-            Direction4::West => Direction4::East
-        }
-    }
-}
-
-#[derive (Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Direction8 {
-    North, NorthEast, East, SouthEast, South, SouthWest, West, NorthWest
-}
-
-impl Direction8 {
-    pub const ALL : [Direction8 ; 8] = [
-        Direction8::North,
-        Direction8::NorthEast,
-        Direction8::East,
-        Direction8::SouthEast,
-        Direction8::South,
-        Direction8::SouthWest,
-        Direction8::West,
-        Direction8::NorthWest
-    ];
-
-    pub fn mirror(self) -> Self {
-        match self {
-            Direction8::North => Direction8::South,
-            Direction8::NorthEast => Direction8::SouthWest,
-            Direction8::East => Direction8::West,
-            Direction8::SouthEast => Direction8::NorthWest,
-            Direction8::South => Direction8::North,
-            Direction8::SouthWest => Direction8::NorthEast,
-            Direction8::West => Direction8::East,
-            Direction8::NorthWest => Direction8::SouthEast
-        }
-    }
-
-    pub fn next(&self) -> Direction8 {
-        match self {
-            Direction8::North => Direction8::NorthEast,
-            Direction8::NorthEast => Direction8::East,
-            Direction8::East => Direction8::SouthEast,
-            Direction8::SouthEast => Direction8::South,
-            Direction8::South => Direction8::SouthWest,
-            Direction8::SouthWest => Direction8::West,
-            Direction8::West => Direction8::NorthWest,
-            Direction8::NorthWest => Direction8::North
-        }
-    }
-
-    pub fn from(d: Direction4) -> Direction8 {
-        match d {
-            Direction4::North => Direction8::North,
-            Direction4::East => Direction8::East,
-            Direction4::South => Direction8::South,
-            Direction4::West => Direction8::West,
-        }
-    }
-}
 
 #[derive (Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pipe {
@@ -119,8 +42,10 @@ impl Pipe {
             None
         }
     }
+}
 
-    fn unicode(&self) -> char {
+impl ConvertibleToChar for Pipe {
+    fn to_char(&self) -> char {
         match self {
             Pipe::NorthEast => '└',
             Pipe::NorthSouth => '│',
@@ -134,60 +59,11 @@ impl Pipe {
     }
 }
 
-#[derive (Debug, Clone, Copy, PartialEq, Eq)]
-struct Position(usize, usize);
-
-impl Position {
-    fn walk4(&self, d: Direction4) -> Option<Position> {
-        let d = match d {
-            Direction4::North => Position(self.0.checked_sub(1)?, self.1),
-            Direction4::East => Position(self.0, self.1.checked_add(1)?),
-            Direction4::South => Position(self.0.checked_add(1)?, self.1),
-            Direction4::West => Position(self.0, self.1.checked_sub(1)?)
-        };
-        Some (d)
-    }
-
-    fn walk8(&self, d: Direction8) -> Option<Position> {
-        let d = match d {
-            Direction8::North => Position(self.0.checked_sub(1)?, self.1),
-            Direction8::NorthEast => Position(self.0.checked_sub(1)?, self.1.checked_add(1)?),
-            Direction8::East => Position(self.0, self.1.checked_add(1)?),
-            Direction8::SouthEast => Position(self.0.checked_add(1)?, self.1.checked_add(1)?),
-            Direction8::South => Position(self.0.checked_add(1)?, self.1),
-            Direction8::SouthWest => Position(self.0.checked_add(1)?, self.1.checked_sub(1)?),
-            Direction8::West => Position(self.0, self.1.checked_sub(1)?),
-            Direction8::NorthWest => Position(self.0.checked_sub(1)?, self.1.checked_sub(1)?)
-        };
-        Some (d)
-    }
-}
-
-
-pub struct Grid (Array2D<Pipe>);
-
-impl fmt::Display for Grid {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for row_it in self.0.rows_iter() {
-            for p in row_it {
-                write!(f, "{}", p.unicode())?;
-            }
-            writeln!(f)?;
-        }
-        Ok (())
-    }
-}
-
-impl ops::Index<Position> for Grid {
-    type Output = Pipe;
-
-    fn index(&self, index: Position) -> &Self::Output {
-        &self.0[(index.0,index.1)]
-    }
-}
+type Position = positions::Position<usize>;
+type Grid = grids::Grid<Pipe>;
 
 #[derive (Debug, Clone, Copy, PartialEq, Eq)]
-enum Enclosure { Inside, Outside, Frontier, NotComputed}
+enum Enclosure { Inside, Outside, Frontier, NotComputed }
 
 impl Enclosure {
     fn invert(&self) -> Option<Enclosure> {
@@ -244,7 +120,7 @@ fn find_start(grid: &Grid) -> Position {
     for (i,row_it) in grid.0.rows_iter().enumerate() {
         for (j,&p) in row_it.enumerate() {
             if p == Pipe::Start {
-                return Position(i,j)
+                return Position::new(i,j)
             }
         }
     }
@@ -254,15 +130,15 @@ fn find_start(grid: &Grid) -> Position {
 fn follow_pipe(grid: &Grid, d: Direction4, p: Position)
         -> Option<(Direction4, Position)> {
     let pipe = grid[p];
-    let d = pipe.other_end(d.mirror())?;
-    let p = p.walk4(d)?;
+    let d = pipe.other_end(d.invert())?;
+    let p = p.step(d)?;
     Some ((d, p))
 }
 
 fn cycle_length(grid: &Grid, mut d: Direction4, mut p: Position) -> Option<u32> {
     let mut length = 1;
     let starting_position = p;
-    p = p.walk4(d).unwrap();
+    p = p.step(d).unwrap();
 
     loop {
         (d, p) = follow_pipe(grid, d, p)?;
@@ -281,7 +157,7 @@ fn mark_cycle(grid: &Grid, mut d: Direction4, mut p: Position)
         grid.0.num_columns());
     let starting_position = p;
     marks[(p.0, p.1)] = true;
-    p = p.walk4(d)?;
+    p = p.step(d)?;
 
     loop {
         marks[(p.0, p.1)] = true;
@@ -339,14 +215,14 @@ fn compute_enclosure(grid: &Grid) -> Array2D<Enclosure> {
             let pipe = grid[p];
             if let Some(pipe_ends) = pipe.ends() {
                 let pipe_ends = pipe_ends.map(Direction8::from);
-                let d_start = d.mirror();
+                let d_start = d.invert();
                 let mut d_current = d_start.next();
                 let mut e_current = e;
                 while d_current != d_start {
                     if pipe_ends.contains(&d_current) {
                         e_current = e_current.invert().unwrap();
                     }
-                    else if let Some(p_current) = p.walk8(d_current) {
+                    else if let Some(p_current) = p.step(d_current) {
                         stack.push((d_current, p_current, e_current));
                     }
                     d_current = d_current.next();
@@ -357,7 +233,7 @@ fn compute_enclosure(grid: &Grid) -> Array2D<Enclosure> {
             enclosure[(p.0,p.1)] = e;
 
             for d in Direction4::ALL {
-                if let Some(p) = p.walk4(d) {
+                if let Some(p) = p.step(d) {
                     stack.push((Direction8::from(d), p, e));
                 }
             }
@@ -373,7 +249,7 @@ fn _print_enclosure(grid: &Grid, enclosure: &Array2D<Enclosure>) {
             let c = match e {
                 Enclosure::Inside => '*',
                 Enclosure::Outside => ' ', 
-                Enclosure::Frontier => grid[Position(i,j)].unicode(),
+                Enclosure::Frontier => grid[Position(i,j)].to_char(),
                 Enclosure::NotComputed => 'x',
             };
             print!("{c}");

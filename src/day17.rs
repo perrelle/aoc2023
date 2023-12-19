@@ -1,73 +1,15 @@
-use std::{fmt, ops::{Index, IndexMut}, collections::BinaryHeap, cmp::Ordering};
-
+use std::{ops::{Index, IndexMut}, collections::BinaryHeap, cmp::Ordering};
+use crate::utils::{*, positions::*, directions::*, grids::*};
 use array2d::Array2D;
 
-#[derive (Debug, Clone, Copy, PartialEq, Eq)]
-enum Direction { Up, Down, Left, Right }
-
-impl Direction {
-    const ALL: [Direction ; 4] =  [
-        Direction::Up,
-        Direction::Down,
-        Direction::Left,
-        Direction::Right
-    ];
-
-    fn opposite(&self) -> Self {
-        match self {
-            Direction::Up    => Direction::Down,
-            Direction::Down  => Direction::Up,
-            Direction::Left  => Direction::Right,
-            Direction::Right => Direction::Left
-        }
-    }
-}
-
-#[derive (Debug, Clone, PartialEq, Eq)]
-struct Position (usize, usize);
-
-impl Position {
-    fn step(&self, d: Direction) -> Option<Self> {
-        let p = match d {
-            Direction::Up   => Position (self.0.checked_sub(1)?, self.1),
-            Direction::Down  => Position (self.0.checked_add(1)?, self.1),
-            Direction::Left  => Position (self.0, self.1.checked_sub(1)?),
-            Direction::Right => Position (self.0, self.1.checked_add(1)?)
-        };
-        Some (p)
-    }
-}
-
+type Direction = directions::Direction4;
+type Position = positions::Position<usize>;
 type Cell = u8;
+type Grid = grids::Grid<Cell>;
 
-#[derive (Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Grid(Array2D<Cell>);
-
-impl Grid {
-    fn is_index_valid(&self, p: &Position) -> bool {
-        p.0 < self.0.num_rows() &&
-        p.1 < self.0.num_columns()
-    }
-}
-
-impl Index<&Position> for Grid {
-    type Output = Cell;
-
-    fn index(&self, index: &Position) -> &Self::Output {
-        &self.0[(index.0, index.1)]
-    }
-}
-
-impl fmt::Display for Grid {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for row_it in self.0.rows_iter() {
-            for cell in row_it {
-                let c = cell.to_string();
-                write!(f, "{}", c)?;
-            }
-            writeln!(f)?;
-        }
-        Ok (())
+impl ConvertibleToChar for u8 {
+    fn to_char(&self) -> char {
+        char::from_digit(*self as u32 , 10).unwrap_or('?')
     }
 }
 
@@ -99,50 +41,9 @@ mod parser {
     }
 }
 
-struct DirectionMap<T> ([T ; 4]);
+type Marks = grids::Grid<Direction4Map<Vec<bool>>>;
 
-impl<T: Default> Default for DirectionMap<T> {
-    fn default() -> Self {
-        DirectionMap(std::array::from_fn(|_| T::default()))
-    }
-}
-
-impl<T> Index<Direction> for DirectionMap<T> {
-    type Output = T;
-
-    fn index(&self, index: Direction) -> &Self::Output {
-        match index {
-            Direction::Up   => &self.0[0],
-            Direction::Down  => &self.0[1],
-            Direction::Left  => &self.0[2],
-            Direction::Right => &self.0[3]
-        }
-    }
-}
-
-impl<T> IndexMut<Direction> for DirectionMap<T> {
-    fn index_mut(&mut self, index: Direction) -> &mut Self::Output {
-        match index {
-            Direction::Up   => &mut self.0[0],
-            Direction::Down  => &mut self.0[1],
-            Direction::Left  => &mut self.0[2],
-            Direction::Right => &mut self.0[3]
-        }        
-    }
-}
-
-struct Marks (Array2D<DirectionMap<Vec<bool>>>);
-
-impl Marks {
-    fn new(num_rows: usize, num_columns: usize) -> Self {
-        Marks(Array2D::filled_by_row_major(
-            DirectionMap::default,
-            num_rows,
-            num_columns))
-    }
-}
-
-impl Index<&ExplorationNode> for Marks {
+impl Index<&ExplorationNode> for grids::Grid<Direction4Map<Vec<bool>>> {
     type Output = bool;
 
     fn index(&self, index: &ExplorationNode) -> &Self::Output {
@@ -213,13 +114,14 @@ fn shortest_path(
         start: &Position,
         end: &Position,
         crucible: &Crucible) -> u32 {
-    let mut marks = Marks::new(grid.0.num_rows(), grid.0.num_columns());
+    let mut marks =
+        Marks::filled_default(grid.0.num_rows(), grid.0.num_columns());
     let mut nodes : BinaryHeap<ExplorationNode> = BinaryHeap::new();
 
     nodes.push(ExplorationNode {
         cost: 0,
-        position: start.clone(),
-        direction: Direction::Down,
+        position: *start,
+        direction: Direction::South,
         consecutive_blocks: 0
     });
 
@@ -234,7 +136,7 @@ fn shortest_path(
         }
 
         for d in Direction::ALL {
-            if d == node.direction.opposite() {
+            if d == node.direction.invert() {
                 continue;
             }
 
@@ -256,7 +158,7 @@ fn shortest_path(
             if let Some(p) = node.position.step(d) {
                 if grid.is_index_valid(&p) {
                     nodes.push(ExplorationNode {
-                        cost: node.cost + (grid[&p] as u32),
+                        cost: node.cost + (grid[p] as u32),
                         position: p,
                         direction: d,
                         consecutive_blocks

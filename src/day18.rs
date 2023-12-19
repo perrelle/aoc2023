@@ -1,6 +1,4 @@
-use array2d::Array2D;
-
-use crate::utils::{directions::*, positions::*, grid::*};
+use crate::utils::{directions::*, positions::*};
 
 #[derive (Debug)]
 pub struct Order {
@@ -54,51 +52,51 @@ mod parser {
     }
 }
 
-#[derive (Debug, Clone, Copy, PartialEq, Eq)]
-enum Cell { Trench, Untouched }
 
-impl ConvertibleToChar for Cell {
-    fn to_char(&self) -> char {
-        match self {
-            Cell::Trench => '#',
-            Cell::Untouched => '.'
-        }
+#[derive (Debug, Clone)]
+struct SimpleOrder {
+    direction: Direction4,
+    distance: u32
+}
+
+impl SimpleOrder {
+    fn from(order: &Order) -> Self {
+        Self { direction: order.direction, distance: order.distance }
+    }
+
+    fn fix(order: &Order) -> Self {
+        let direction = match order.color & 0xf {
+                0 => Direction4::East,
+                1 => Direction4::South,
+                2 => Direction4::West,
+                3 => Direction4::North,
+                _ => panic!()
+            };
+        let distance = order.color / 16;
+        Self { direction, distance }
     }
 }
 
-type G = Grid<Cell>;
-type Position = crate::utils::positions::Position<usize>;
 
-enum Pass<'a> { Measuring(&'a mut (usize, usize)), Filling(&'a mut G, &'a mut Vec<Position>) }
+type Position = crate::utils::positions::Position<i32>;
 
-fn walk(orders: &Vec<Order>, pass: &mut Pass) {
+fn walk(orders: &Vec<SimpleOrder>) -> Vec<Position> {
     let mut p = Position(0, 0);
+    let mut v = Vec::new();
 
     for order in orders {
-        match pass {
-            Pass::Measuring(_) => (),
-            Pass::Filling(_, v) => {
-                v.push(p.clone());
-            }
-        }
-
+        v.push(p);
         for _ in 0..order.distance {
             p = p.step(order.direction).unwrap();
-            match pass {
-                Pass::Measuring(r) => {
-                    **r = (r.0.max(p.0), r.1.max(p.1))
-                },
-                Pass::Filling(grid, _) => {
-                    grid[&p] = Cell::Trench;
-                }
-            }
         }
     }
+
+    v
 }
 
-fn area_inside_curve(curve: &Vec<Position>, with_perimeter: bool) -> u32 {
-    let mut double_area: i32 = 0;
-    let mut perimeter: i32 = 0;
+fn area_inside_curve(curve: &Vec<Position>, with_perimeter: bool) -> u64 {
+    let mut double_area: i64 = 0;
+    let mut perimeter: i64 = 0;
 
     for i in 0..curve.len() {
         let j = if i + 1 >= curve.len() {
@@ -107,44 +105,36 @@ fn area_inside_curve(curve: &Vec<Position>, with_perimeter: bool) -> u32 {
                 i + 1
             };
         double_area +=
-            (curve[i].0 as i32 - curve[j].0 as i32) *
-            (curve[i].1 as i32 + curve[j].1 as i32);
+            (curve[i].0 as i64 - curve[j].0 as i64) *
+            (curve[i].1 as i64 + curve[j].1 as i64);
         perimeter +=
-            (curve[i].0 as i32 - curve[j].0 as i32).abs() +
-            (curve[i].1 as i32 - curve[j].1 as i32).abs();
+            (curve[i].0 as i64 - curve[j].0 as i64).abs() +
+            (curve[i].1 as i64 - curve[j].1 as i64).abs();
     }
 
     let pc = if with_perimeter { 1 } else { -1 };
     let real_area = (double_area.abs() + pc * perimeter) / 2 + 1;
-    println!("A = {}, P = {}, R = {}", double_area, perimeter, real_area);
-    real_area as u32
+    real_area as u64
 }
 
-pub fn solve(input: &str) -> (u32, u32) {
+pub fn solve(input: &str) -> (u64, u64) {
     let (_,orders) = parser::parse(input).unwrap();
-    let mut dimensions = (0usize, 0usize);
-    let mut pass1 = Pass::Measuring(&mut dimensions);
-    walk(&orders, &mut pass1);
-    let mut grid = Grid (Array2D::filled_with(
-        Cell::Untouched,
-        dimensions.0 + 1,
-        dimensions.1 + 1));
-    let mut curve: Vec<Position> = Vec::new();
-    let mut pass2 = Pass::Filling(&mut grid, &mut curve);
-    walk(&orders, &mut pass2);
-    println!("{grid}");
+    let orders1 = orders.iter().map(SimpleOrder::from).collect();
+    let orders2 = orders.iter().map(SimpleOrder::fix).collect();
+    let curve1 = walk(&orders1);
+    let curve2 = walk(&orders2);
 
-    (area_inside_curve(&curve, true), 0)
+    (area_inside_curve(&curve1, true), area_inside_curve(&curve2, true))
 }
 
 #[test]
 fn day18_example() {
     let solution = solve(include_str!("../inputs/day18-example"));
-    assert_eq!(solution, (62, 0));
+    assert_eq!(solution, (62, 952408144115));
 }
 
 #[test]
 fn day18_input() {
     let solution = solve(include_str!("../inputs/day18-input"));
-    assert_eq!(solution, (0, 0));
+    assert_eq!(solution, (34329, 42617947302920));
 }

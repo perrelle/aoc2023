@@ -1,7 +1,7 @@
 pub mod utils {
     pub mod directions;
     pub mod positions;
-    pub mod grid;
+    pub mod grids;
 }
 
 pub mod day1;
