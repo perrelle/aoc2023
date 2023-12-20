@@ -2,6 +2,7 @@ pub mod utils {
     pub mod directions;
     pub mod positions;
     pub mod grids;
+    pub mod intervals;
 }
 
 pub mod day1;
@@ -22,5 +23,6 @@ pub mod day15;
 pub mod day16;
 pub mod day17;
 pub mod day18;
+pub mod day19;
 
 fn main() {}
